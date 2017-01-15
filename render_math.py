@@ -35,6 +35,7 @@ import os
 import sys
 
 from pelican import signals, generators
+from pelican.utils import truncate_html_words
 
 try:
     from bs4 import BeautifulSoup
@@ -321,7 +322,12 @@ def process_summary(article):
     """Ensures summaries are not cut off. Also inserts
     mathjax script so that math will be rendered"""
 
-    summary = article._get_summary()
+    if (hasattr(article, '_summary')):
+        summary = article._update_content(article._summary, article.get_siteurl())
+    elif article.settings['SUMMARY_MAX_LENGTH'] is None:
+        summary = article.content
+    else:
+        summary = truncate_html_words(article.content, article.settings['SUMMARY_MAX_LENGTH'])
     summary_parsed = BeautifulSoup(summary, 'html.parser')
     math = summary_parsed.find_all(class_='math')
 
@@ -388,7 +394,16 @@ def mathjax_for_markdown(pelicanobj, mathjax_script, mathjax_settings):
 
     # Instantiate markdown extension and append it to the current extensions
     try:
-        pelicanobj.settings['MD_EXTENSIONS'].append(PelicanMathJaxExtension(config))
+        if 'MARKDOWN' in pelicanobj.settings:
+            mathjax = PelicanMathJaxExtension(config)
+            if 'extensions' in pelicanobj.settings['MARKDOWN']:
+                pelicanobj.settings['MARKDOWN']['extension'].append(mathjax)
+            else:
+                pelicanobj.settings['MARKDOWN']['extensions'] = [mathjax]
+        elif 'MD_EXTENSIONS' in pelicanobj.settings:
+            pelicanobj.settings['MD_EXTENSIONS'].append(PelicanMathJaxExtension(config))
+        else:
+            raise LookupError("Could not find pelicanobj.settings['MARKDOWN']")
     except:
         sys.excepthook(*sys.exc_info())
         sys.stderr.write("\nError - the pelican mathjax markdown extension failed to configure. MathJax is non-functional.\n")
